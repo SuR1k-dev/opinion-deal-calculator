@@ -288,6 +288,14 @@ export default function Home() {
         return 'bg-risk-red/10 border-risk-red/30';
     };
 
+    const formatSlippage = (value: number) => formatPercent(-Math.abs(value));
+    const slippageColor = (value: number) => {
+        const abs = Math.abs(value);
+        if (abs > 2) return 'text-loss';
+        if (abs > 0.5) return 'text-risk-yellow';
+        return 'text-profit';
+    };
+
     // ==================== RENDER ====================
 
     return (
@@ -449,8 +457,8 @@ export default function Home() {
                                 <BigStat label="Avg Entry Price" value={formatPrice(marketOrderResult.avgPrice)} />
                                 <BigStat
                                     label="Slippage"
-                                    value={formatPercent(marketOrderResult.slippagePercent)}
-                                    color={marketOrderResult.slippagePercent > 2 ? 'text-loss' : marketOrderResult.slippagePercent > 0.5 ? 'text-risk-yellow' : 'text-profit'}
+                                    value={formatSlippage(marketOrderResult.slippagePercent)}
+                                    color={slippageColor(marketOrderResult.slippagePercent)}
                                 />
                                 <Stat label="Position Size" value={formatShares(marketOrderResult.positionSize) + ' shares'} />
                                 <Stat label="Total Cost" value={formatUsd(marketOrderResult.totalCost)} />
@@ -631,8 +639,8 @@ export default function Home() {
                                         <Stat label="Stressed Avg Price" value={formatPrice(stressResult.avgPrice)} />
                                         <Stat
                                             label="Stressed Slippage"
-                                            value={formatPercent(stressResult.slippagePercent)}
-                                            color={stressResult.slippagePercent > 2 ? 'text-loss' : 'text-risk-yellow'}
+                                            value={formatSlippage(stressResult.slippagePercent)}
+                                            color={slippageColor(stressResult.slippagePercent)}
                                         />
                                         <Stat label="Position Size" value={formatShares(stressResult.positionSize)} />
                                         {!stressResult.fullyFilled && (
@@ -659,7 +667,7 @@ export default function Home() {
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                                 <SummaryRow label="Avg Entry" value={formatPrice(marketOrderResult.avgPrice)} />
-                                <SummaryRow label="Slippage" value={formatPercent(marketOrderResult.slippagePercent)} valueColor={marketOrderResult.slippagePercent > 2 ? 'text-loss' : 'text-text-primary'} />
+                                <SummaryRow label="Slippage" value={formatSlippage(marketOrderResult.slippagePercent)} valueColor={slippageColor(marketOrderResult.slippagePercent)} />
                                 {breakEvenResult && (
                                     <SummaryRow label="Break-Even" value={formatPrice(breakEvenResult.breakEvenPrice)} />
                                 )}
