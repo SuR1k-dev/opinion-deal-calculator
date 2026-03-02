@@ -112,12 +112,15 @@ export default function Home() {
                 const res = await fetch(`/api/market/${marketId}`);
                 if (!res.ok) {
                     const errData = await res.json().catch(() => ({}));
-                    // Check for Error 10200, 10218 -> Try Categorical
-                    const errMsg = JSON.stringify(errData);
-                    if (res.status === 500 && (errMsg.includes('10200') || errMsg.includes('10218'))) {
-                        console.log('Error 10200/10218 detected, trying categorical...');
+                    // Check for Error 10200, 10218, 10003 -> Try Categorical
+                    const errMsg = JSON.stringify(errData).toLowerCase();
+                    if (res.status === 500 && (errMsg.includes('10200') || errMsg.includes('10218') || errMsg.includes('10003') || errMsg.includes('not a binary market'))) {
+                        console.log('Categorical market error detected, trying categorical endpoint...');
                         const catRes = await fetch(`/api/market/${marketId}?type=categorical`);
-                        if (!catRes.ok) throw new Error(errData.error || `Failed to load market (${res.status})`);
+                        if (!catRes.ok) {
+                            const catErrData = await catRes.json().catch(() => ({}));
+                            throw new Error(catErrData.error || `Failed to load market (${catRes.status})`);
+                        }
                         rawData = await catRes.json();
                         isParent = true;
                     } else {
