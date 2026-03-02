@@ -37,8 +37,8 @@ async function apiFetch<T>(endpoint: string): Promise<T> {
 // --- Types ---
 
 export interface MarketData {
-    marketId: number;
-    market_id?: number;
+    marketId: number | string;
+    market_id?: number | string;
     marketTitle: string;
     market_title?: string;
     status: number; // 1=Created, 2=Activated, 3=Resolving, 4=Resolved, 5=Failed, 6=Deleted
@@ -87,7 +87,10 @@ export interface FeeRates {
 
 // --- API methods ---
 
-export async function getMarket(marketId: number): Promise<MarketData> {
+export async function getMarket(marketId: number | string): Promise<MarketData> {
+    if (typeof marketId === 'string' && isNaN(Number(marketId))) {
+        return apiFetch<MarketData>(`/market/slug/${marketId}`);
+    }
     return apiFetch<MarketData>(`/market/${marketId}`);
 }
 
@@ -103,6 +106,38 @@ export async function getFeeRates(tokenId: string): Promise<FeeRates> {
     return apiFetch<FeeRates>(`/token/fee-rates?token_id=${tokenId}`);
 }
 
-export async function getCategoricalMarket(marketId: number): Promise<MarketData> {
+export async function getCategoricalMarket(marketId: number | string): Promise<MarketData> {
+    if (typeof marketId === 'string' && isNaN(Number(marketId))) {
+        return apiFetch<MarketData>(`/market/categorical/slug/${marketId}`);
+    }
     return apiFetch<MarketData>(`/market/categorical/${marketId}`);
+}
+
+export async function resolveSlug(slug: string): Promise<number | null> {
+    for (const status of ['activated', 'resolved']) {
+        const totalPages = 30;
+        const parallelBatches = 5;
+        for (let batch = 0; batch < totalPages / parallelBatches; batch++) {
+            const pages = Array.from({ length: parallelBatches }, (_, i) => batch * parallelBatches + i + 1);
+            const responses = await Promise.all(
+                pages.map(p =>
+                    fetch(`${BASE_URL}/market?status=${status}&limit=20&page=${p}`, {
+                        headers: { 'apikey': getApiKey(), 'Content-Type': 'application/json' },
+                        next: { revalidate: 60 }
+                    }).then(r => r.json()).catch(() => null)
+                )
+            );
+            let hasData = false;
+            for (const data of responses) {
+                if (data && data.errno === 0 && data.result?.list?.length) {
+                    hasData = true;
+                    for (const m of data.result.list) {
+                        if (m.slug === slug) return m.marketId || m.market_id;
+                    }
+                }
+            }
+            if (!hasData) break;
+        }
+    }
+    return null;
 }

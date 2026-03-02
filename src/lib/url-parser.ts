@@ -1,35 +1,29 @@
-// Parse Opinion market URL to extract marketId
+// Parse Opinion market URL to extract marketId or slug
 // Format: https://app.opinion.trade/detail?topicId=1234
+// Format: https://app.opinion.trade/market/megaeth-airdrop-by
 
-export function parseMarketUrl(url: string): number | null {
+export function parseMarketUrl(url: string): string | null {
     try {
-        // Try parsing as full URL
-        const parsed = new URL(url);
+        const urlObj = new URL(url);
 
-        // Check it's opinion.trade domain
-        if (!parsed.hostname.includes('opinion.trade') && !parsed.hostname.includes('opinion')) {
-            // Maybe it's just a number
-            const num = parseInt(url.trim(), 10);
-            return isNaN(num) ? null : num;
+        if (!urlObj.hostname.includes('opinion.trade') && !urlObj.hostname.includes('opinion')) {
+            const rawId = url.trim();
+            return rawId ? rawId : null;
         }
 
-        // Extract topicId from query params
-        const topicId = parsed.searchParams.get('topicId');
+        const topicId = urlObj.searchParams.get('topicId');
         if (topicId) {
-            const id = parseInt(topicId, 10);
-            return isNaN(id) ? null : id;
+            return topicId;
         }
 
-        // Try path-based: /detail/1234 or /market/1234
-        const pathMatch = parsed.pathname.match(/\/(?:detail|market|topic)\/(\d+)/);
+        const pathMatch = urlObj.pathname.match(/\/(?:detail|market|topic)\/([^/]+)/);
         if (pathMatch) {
-            return parseInt(pathMatch[1], 10);
+            return pathMatch[1];
         }
 
         return null;
     } catch {
-        // If URL parsing fails, try as plain number
-        const num = parseInt(url.trim(), 10);
-        return isNaN(num) ? null : num;
+        const rawId = url.trim();
+        return rawId ? rawId : null;
     }
 }

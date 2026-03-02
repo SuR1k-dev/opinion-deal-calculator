@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCategoricalMarket } from '@/lib/opinion-api';
+import { getCategoricalMarket, resolveSlug } from '@/lib/opinion-api';
 import { cacheGet, cacheSet } from '@/lib/cache';
 
 export async function GET(
@@ -8,18 +8,17 @@ export async function GET(
 ) {
     try {
         const { marketId } = await params;
-        const id = parseInt(marketId, 10);
-        if (isNaN(id)) {
+        if (!marketId) {
             return NextResponse.json({ error: 'Invalid market ID' }, { status: 400 });
         }
 
-        const cacheKey = `cat_market:${id}`;
+        const cacheKey = `cat_market:${marketId}`;
         const cached = cacheGet(cacheKey);
         if (cached) {
             return NextResponse.json(cached);
         }
 
-        const data = await getCategoricalMarket(id);
+        const data = await getCategoricalMarket(marketId);
         cacheSet(cacheKey, data, 30_000); // 30s cache
         return NextResponse.json(data);
     } catch (err: unknown) {

@@ -28,7 +28,7 @@ import Accordion from '@/components/Accordion';
 // ==================== TYPES ====================
 
 interface MarketInfo {
-    marketId: number;
+    marketId: number | string;
     marketTitle: string;
     status: number;
     yesTokenId: string;
@@ -76,7 +76,7 @@ export default function Home() {
 
     // ==================== LOAD MARKET ====================
 
-    const loadMarket = useCallback(async (overrideId?: number) => {
+    const loadMarket = useCallback(async (overrideId?: number | string) => {
         setError('');
         if (!overrideId) {
             setMarket(null);
@@ -87,7 +87,7 @@ export default function Home() {
 
         const marketId = overrideId || parseMarketUrl(urlInput);
         if (!marketId) {
-            setError('Invalid URL or Market ID. Use format: https://app.opinion.trade/detail?topicId=1234');
+            setError('Invalid URL or Market ID. Use format: https://app.opinion.trade/market/slug');
             return;
         }
 
@@ -112,10 +112,10 @@ export default function Home() {
                 const res = await fetch(`/api/market/${marketId}`);
                 if (!res.ok) {
                     const errData = await res.json().catch(() => ({}));
-                    // Check for Error 10200 -> Try Categorical
+                    // Check for Error 10200, 10218 -> Try Categorical
                     const errMsg = JSON.stringify(errData);
-                    if (res.status === 500 && errMsg.includes('10200')) {
-                        console.log('Error 10200 detected, trying categorical...');
+                    if (res.status === 500 && (errMsg.includes('10200') || errMsg.includes('10218'))) {
+                        console.log('Error 10200/10218 detected, trying categorical...');
                         const catRes = await fetch(`/api/market/${marketId}?type=categorical`);
                         if (!catRes.ok) throw new Error(errData.error || `Failed to load market (${res.status})`);
                         rawData = await catRes.json();
@@ -128,32 +128,51 @@ export default function Home() {
                 }
             }
 
-            const source = rawData.data ? rawData.data : rawData; // Unwrap 'data' key if present
+            const source = rawData.data ? rawData.data : rawData;
+
+            let mSource: any = {};
+            let childMarketsList: any[] = [];
+            let isParentFound = isParent;
+
+            if (Array.isArray(source)) {
+                // Return is directly a list of options
+                mSource = { marketTitle: urlInput.split('/').pop() || 'Categorical Market' };
+                childMarketsList = source;
+                isParentFound = true;
+            } else {
+                mSource = source?.market || source || {};
+                const foundChildren = source?.childMarkets || source?.child_markets || mSource?.childMarkets || mSource?.child_markets || source?.list || mSource?.list;
+                if (Array.isArray(foundChildren)) {
+                    childMarketsList = foundChildren;
+                }
+                if (childMarketsList.length > 0) {
+                    isParentFound = true;
+                }
+            }
 
             // Normalize
             const marketData: MarketInfo = {
-                marketId: source.marketId ?? source.market_id ?? source.id,
-                marketTitle: source.marketTitle ?? source.market_title ?? source.title,
-                status: source.status,
-                yesTokenId: source.yesTokenId || source.yes_token_id || source.yes_token || source.yes_token_addr || source.yesToken || source.token_yes,
-                noTokenId: source.noTokenId || source.no_token_id || source.no_token || source.no_token_addr || source.noToken || source.token_no,
-                cutoffAt: (source.cutoffAt ?? source.cutoff_at ?? source.end_time) || 0,
-                volume: String(source.volume ?? source.total_volume ?? source.vol ?? '0'),
-                childMarkets: source.childMarkets || source.child_markets
+                marketId: mSource.marketId ?? mSource.market_id ?? mSource.id ?? 0,
+                marketTitle: mSource.marketTitle ?? mSource.market_title ?? mSource.title ?? 'Categorical Market',
+                status: mSource.status ?? 0,
+                yesTokenId: mSource.yesTokenId || mSource.yes_token_id || mSource.yes_token || mSource.yes_token_addr || mSource.yesToken || mSource.token_yes,
+                noTokenId: mSource.noTokenId || mSource.no_token_id || mSource.no_token || mSource.no_token_addr || mSource.noToken || mSource.token_no,
+                cutoffAt: (mSource.cutoffAt ?? mSource.cutoff_at ?? mSource.end_time) || 0,
+                volume: String(mSource.volume ?? mSource.total_volume ?? mSource.vol ?? '0'),
+                childMarkets: childMarketsList
             };
 
-            // Handle Parent Market - Render Outcomes
-            if (isParent || (marketData.childMarkets && marketData.childMarkets.length > 0)) {
+            if (isParentFound || childMarketsList.length > 0) {
                 setParentTitle(marketData.marketTitle);
-                const children = (marketData.childMarkets || []).map((c: any) => ({
+                const children = childMarketsList.map((c: any) => ({
                     marketId: c.marketId ?? c.market_id ?? c.id,
                     marketTitle: c.marketTitle ?? c.market_title ?? c.title,
                     status: c.status,
-                    yesTokenId: c.yesTokenId,
-                    noTokenId: c.noTokenId,
-                    cutoffAt: c.cutoffAt ?? c.end_time,
+                    yesTokenId: c.yesTokenId ?? c.yes_token_id ?? c.yes_token,
+                    noTokenId: c.noTokenId ?? c.no_token_id ?? c.no_token,
+                    cutoffAt: c.cutoffAt ?? c.end_time ?? c.cutoff_at,
                     volume: String(c.volume ?? c.total_volume ?? '0')
-                })).sort((a: any, b: any) => a.marketId - b.marketId);
+                })).sort((a: any, b: any) => parseFloat(String(b.volume)) - parseFloat(String(a.volume)));
 
                 setOutcomes(children);
                 setMarket(null);
@@ -303,9 +322,7 @@ export default function Home() {
             {/* Header */}
             <header className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-border/50">
                 <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-lg font-bold">
-                        O
-                    </div>
+                    <img src="/icon.png" alt="Icon" className="w-9 h-9 rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.3)] shadow-accent/20" />
                     <div>
                         <h1 className="text-lg font-bold tracking-tight">Deal Calculator</h1>
                         <p className="text-xs text-text-muted">opinion.trade</p>
@@ -325,7 +342,7 @@ export default function Home() {
                             value={urlInput}
                             onChange={e => setUrlInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && loadMarket()}
-                            placeholder="https://app.opinion.trade/detail?topicId=1234"
+                            placeholder="https://app.opinion.trade/market/megaeth-airdrop-by"
                             className="flex-1 bg-bg-card border border-border rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-focus transition-colors"
                         />
                         <button

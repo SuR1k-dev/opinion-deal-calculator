@@ -22,7 +22,7 @@ export async function GET(
         cacheSet(cacheKey, data, 60_000); // 60s cache
         return NextResponse.json(data);
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        // Fallback to 0 fees to avoid 500 errors crashing the console
+        return NextResponse.json({ takerFeeRate: "0", makerFeeRate: "0" });
     }
 }
