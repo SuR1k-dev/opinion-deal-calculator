@@ -107,27 +107,30 @@ export default function Home() {
                 } catch { /* ignore */ }
             }
 
-            // 2. Try fetching Normal (or handle 10200 fallback)
+            // 2. Try fetching Normal and Categorical in parallel for blazing fast response
             if (!rawData) {
-                const res = await fetch(`/api/market/${marketId}`);
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    // Check for Error 10200, 10218, 10003 -> Try Categorical
-                    const errMsg = JSON.stringify(errData).toLowerCase();
-                    if (res.status === 500 && (errMsg.includes('10200') || errMsg.includes('10218') || errMsg.includes('10003') || errMsg.includes('not a binary market'))) {
-                        console.log('Categorical market error detected, trying categorical endpoint...');
-                        const catRes = await fetch(`/api/market/${marketId}?type=categorical`);
-                        if (!catRes.ok) {
-                            const catErrData = await catRes.json().catch(() => ({}));
-                            throw new Error(catErrData.error || `Failed to load market (${catRes.status})`);
-                        }
-                        rawData = await catRes.json();
-                        isParent = true;
-                    } else {
-                        throw new Error(errData.error || `Failed to load market (${res.status})`);
-                    }
+                const [normalRes, catRes] = await Promise.all([
+                    fetch(`/api/market/${marketId}`),
+                    fetch(`/api/market/${marketId}?type=categorical`)
+                ]);
+
+                if (normalRes.ok) {
+                    rawData = await normalRes.json();
+                } else if (catRes.ok) {
+                    rawData = await catRes.json();
+                    isParent = true;
                 } else {
-                    rawData = await res.json();
+                    const errData = await normalRes.json().catch(() => ({}));
+                    const catErrData = await catRes.json().catch(() => ({}));
+
+                    const errMsg = JSON.stringify(errData).toLowerCase();
+
+                    // Specifically prioritize categorical fallback on fallback errors 10003/10200/10218
+                    if (normalRes.status === 500 && (errMsg.includes('10200') || errMsg.includes('10218') || errMsg.includes('10003') || errMsg.includes('not a binary market'))) {
+                        throw new Error(catErrData.error || `Failed to load market (${catRes.status})`);
+                    } else {
+                        throw new Error(errData.error || `Failed to load market`);
+                    }
                 }
             }
 
